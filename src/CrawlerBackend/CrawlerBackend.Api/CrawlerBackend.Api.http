@@ -1,0 +1,6 @@
+@CrawlerBackend.Api_HostAddress = http://localhost:5157
+
+GET {{CrawlerBackend.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

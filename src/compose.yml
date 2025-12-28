@@ -1,0 +1,100 @@
+name: crawler
+services:
+  swagger:
+    image: docker.swagger.io/swaggerapi/swagger-ui
+    environment:
+      - SWAGGER_JSON_URL=http://localhost:8089/openapi/v1.json
+    ports:
+      - 9870:8080
+  api:
+    build:
+      context: CrawlerBackend
+      dockerfile: CrawlerBackend.Api/Dockerfile
+    environment:
+      - TELEMETRY__LOGGING__HOST=http://collector:4318/v1/logs
+      - TELEMETRY__TRACES__HOST=http://collector:4318/v1/traces
+      - TELEMETRY__METRICS__HOST=http://collector:4318/v1/metrics
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_HTTP_PORTS=8080
+    ports:
+      - 8089:8080
+    networks:
+      - main
+  worker:
+    build:
+      context: CrawlerBackend
+      dockerfile: CrawlerBackend.Service/Dockerfile
+    environment:
+      - TELEMETRY__LOGGING__HOST=http://collector:4318/v1/logs
+      - TELEMETRY__TRACES__HOST=http://collector:4318/v1/traces
+      - TELEMETRY__METRICS__HOST=http://collector:4318/v1/metrics
+      - CRAWLER__URI=http://api:8080/main
+      - DOTNET__ENVIRONMENT=Production
+    depends_on:
+      - api
+    networks:
+      - main
+
+  loki:
+    image: docker.io/grafana/loki:3.6.3
+    volumes:
+      - ./loki/loki-config.yaml:/etc/loki/local-config.yaml
+    ports:
+      - 3100:3100
+    depends_on:
+      - collector
+    networks:
+      - main
+
+  tempo:
+    image: docker.io/grafana/tempo
+    command: [ "-config.file=/etc/tempo.yaml" ]
+    volumes:
+      - ./tempo/config.yaml:/etc/tempo.yaml
+    ports:
+      - 3200:3200
+    depends_on:
+      - collector
+    networks:
+      - main
+
+  prometheus:
+    image: docker.io/prom/prometheus
+    ports:
+      - 9090:9090
+    volumes:
+      - ./prometheus/config.yml:/etc/prometheus/prometheus.yml
+    depends_on:
+      - collector
+    networks:
+      - main
+
+  collector:
+    image: docker.io/otel/opentelemetry-collector
+    volumes: 
+      - ./otel-collector/config.yaml:/etc/otelcol/config.yaml
+    ports:
+      - 1888:1888 # pprof extension
+      - 8888:8888 # Prometheus metrics exposed by the Collector
+      - 8889:8889 # Prometheus exporter metrics
+      - 13133:13133 # health_check extension
+      - 4317:4317 # OTLP gRPC receiver
+      - 4318:4318 # OTLP http receiver
+      - 55679:55679 # zpages extension
+    networks:
+      - main
+
+  grafana:
+    image: docker.io/grafana/grafana:latest
+    ports: 
+      - 3000:3000
+    depends_on:
+      - loki
+      - tempo
+      - prometheus
+    networks:
+      - main
+
+
+networks:
+  main:

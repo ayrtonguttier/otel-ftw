@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="CrawlerBackend.Api/CrawlerBackend.Api.csproj" />
+  <Project Path="CrawlerBackend.Service/CrawlerBackend.Service.csproj" />
+</Solution>
